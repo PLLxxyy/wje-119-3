@@ -30,6 +30,13 @@ interface EventDetail {
   projects: Project[];
 }
 
+interface ResultEntry {
+  rank: number;
+  bib_number: string;
+  username: string;
+  finish_time: string;
+}
+
 const projectLabels: Record<string, string> = {
   full: '全程马拉松',
   half: '半程马拉松',
@@ -41,14 +48,19 @@ export default function EventDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [event, setEvent] = useState<EventDetail | null>(null);
+  const [results, setResults] = useState<Record<string, ResultEntry[]>>({});
   const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState<number | null>(null);
+  const [activeProjectTab, setActiveProjectTab] = useState<string>('');
 
   useEffect(() => {
     const fetchEvent = async () => {
       try {
         const res = await api.get<{ data: EventDetail }>(`/events/${id}`);
         setEvent(res.data);
+        if (res.data.projects.length > 0) {
+          setActiveProjectTab(res.data.projects[0].name);
+        }
       } catch {
         navigate('/');
       } finally {
@@ -58,10 +70,29 @@ export default function EventDetail() {
     fetchEvent();
   }, [id, navigate]);
 
+  useEffect(() => {
+    const fetchResults = async () => {
+      if (event && (event.status === 'finished' || event.status === 'ongoing')) {
+        try {
+          const res = await api.get<{ data: Record<string, ResultEntry[]> }>(`/events/${id}/results`);
+          setResults(res.data);
+        } catch {
+          // ignore
+        }
+      }
+    };
+    fetchResults();
+  }, [event, id]);
+
   if (loading) return <div className="loading">加载中...</div>;
   if (!event) return <div className="loading">赛事不存在</div>;
 
   const isRegisterable = event.status === 'upcoming' && new Date(event.registration_deadline) > new Date();
+  const showResults = (event.status === 'finished' || event.status === 'ongoing') && Object.keys(results).length > 0;
+
+  const hasResults = (projectName: string) => {
+    return results[projectName] && results[projectName].length > 0;
+  };
 
   return (
     <div className="main-content">
@@ -189,6 +220,106 @@ export default function EventDetail() {
           </div>
         )}
       </div>
+
+      {showResults && (
+        <div style={{ marginTop: 48 }}>
+          <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 20, color: '#1a1a2e' }}>
+            🏆 成绩榜单
+          </h2>
+          
+          <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+            {event.projects.map(project => (
+              <button
+                key={project.name}
+                onClick={() => setActiveProjectTab(project.name)}
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: 24,
+                  border: 'none',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  background: activeProjectTab === project.name ? '#e63946' : '#f0f0f0',
+                  color: activeProjectTab === project.name ? 'white' : '#555',
+                }}
+              >
+                {projectLabels[project.name] || project.name}
+                {hasResults(project.name) && (
+                  <span style={{ marginLeft: 8, opacity: 0.8 }}>
+                    ({results[project.name].length}人)
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {hasResults(activeProjectTab) ? (
+            <div style={{
+              background: 'white',
+              borderRadius: 12,
+              overflow: 'hidden',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f8f9fa' }}>
+                    <th style={thStyle}>排名</th>
+                    <th style={thStyle}>参赛号码</th>
+                    <th style={thStyle}>姓名</th>
+                    <th style={thStyle}>完赛成绩</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {results[activeProjectTab].map((entry, index) => (
+                    <tr 
+                      key={entry.bib_number} 
+                      style={{ 
+                        borderBottom: '1px solid #f0f0f0',
+                        background: index < 3 ? 'linear-gradient(to right, #fff9f9, #ffffff)' : undefined
+                      }}
+                    >
+                      <td style={tdStyle}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 32,
+                          height: 32,
+                          borderRadius: '50%',
+                          fontWeight: 700,
+                          fontSize: 14,
+                          background: index === 0 ? '#ffd700' : index === 1 ? '#c0c0c0' : index === 2 ? '#cd7f32' : '#f0f0f0',
+                          color: index < 3 ? '#fff' : '#666',
+                        }}>
+                          {entry.rank}
+                        </span>
+                      </td>
+                      <td style={tdStyle}><strong>{entry.bib_number}</strong></td>
+                      <td style={tdStyle}>{entry.username}</td>
+                      <td style={{ ...tdStyle, fontWeight: 700, color: '#e63946', fontSize: 16 }}>
+                        {entry.finish_time}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div style={{
+              background: 'white',
+              borderRadius: 12,
+              padding: 48,
+              textAlign: 'center',
+              color: '#999',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>⏱️</div>
+              <div style={{ fontSize: 16 }}>该项目暂无成绩数据，敬请期待</div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -224,3 +355,17 @@ function SmallInfoCard({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+const thStyle: React.CSSProperties = {
+  padding: '14px 20px',
+  textAlign: 'left',
+  fontSize: 14,
+  fontWeight: 600,
+  color: '#555',
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: '14px 20px',
+  fontSize: 14,
+  color: '#333',
+};

@@ -95,12 +95,14 @@ export default function Dashboard() {
                   </span>
                 </td>
                 <td style={tdStyle}>
-                  <Link
-                    to={`/admin/events/${event.id}/registrations`}
-                    style={{ color: '#457b9d', fontSize: 14 }}
-                  >
-                    查看报名
-                  </Link>
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    <Link
+                      to={`/admin/events/${event.id}/registrations`}
+                      style={{ color: '#457b9d', fontSize: 14 }}
+                    >
+                      成绩录入
+                    </Link>
+                  </div>
                 </td>
               </tr>
             ))}

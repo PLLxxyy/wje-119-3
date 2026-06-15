@@ -167,4 +167,33 @@ router.get('/events/:id/export', (req: AuthRequest, res: Response) => {
   }
 });
 
+// Update registration result (finish_time)
+router.put('/registrations/:id/result', (req: AuthRequest, res: Response) => {
+  try {
+    const { finish_time } = req.body;
+
+    const existing = db.prepare('SELECT * FROM registrations WHERE id = ?').get(req.params.id);
+    if (!existing) {
+      res.status(404).json({ error: '报名记录不存在' });
+      return;
+    }
+
+    db.prepare('UPDATE registrations SET finish_time = ? WHERE id = ?')
+      .run(finish_time || '', req.params.id);
+
+    const registration = db.prepare(`
+      SELECT r.*, u.username, u.email, u.phone as user_phone, ep.name as project_name, ep.distance
+      FROM registrations r
+      JOIN users u ON r.user_id = u.id
+      JOIN event_projects ep ON r.project_id = ep.id
+      WHERE r.id = ?
+    `).get(req.params.id);
+
+    res.json({ data: registration });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : '更新成绩失败';
+    res.status(500).json({ error: message });
+  }
+});
+
 export default router;
